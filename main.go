@@ -2,43 +2,41 @@ package main
 
 import (
 	"fmt"
-		"net/http"
+	"net/http"
+	"urlshort"
+	"log"
+	"flag"
+)
 
-			"github.com/gophercises/urlshort"
-			)
+func main() {
+	yamlFilename := flag.String("yaml-file", "redirect.yaml", "Yaml file name with redirection URLs")
+	flag.Parse()
 
-			func main() {
-				mux := defaultMux()
+	mux := defaultMux()
 
-					// Build the MapHandler using the mux as the fallback
-						pathsToUrls := map[string]string{
-								"/urlshort-godoc": "https://godoc.org/github.com/gophercises/urlshort",
-										"/yaml-godoc":     "https://godoc.org/gopkg.in/yaml.v2",
-											}
-												mapHandler := urlshort.MapHandler(pathsToUrls, mux)
+	mapHandler := urlshort.NewHttpRedirectHandler(
+		urlshort.NewBaseUrlMapper(map[string]string{
+			"/urlshort-godoc": "https://godoc.org/github.com/gophercises/urlshort",
+			"/yaml-godoc":     "https://godoc.org/gopkg.in/yaml.v2",
+		}), mux)
 
-													// Build the YAMLHandler using the mapHandler as the
-														// fallback
-															yaml := `
-															- path: /urlshort
-															  url: https://github.com/gophercises/urlshort
-															  - path: /urlshort-final
-															    url: https://github.com/gophercises/urlshort/tree/solution
-																`
-																	yamlHandler, err := urlshort.YAMLHandler([]byte(yaml), mapHandler)
-																		if err != nil {
-																				panic(err)
-																					}
-																						fmt.Println("Starting the server on :8080")
-																							http.ListenAndServe(":8080", yamlHandler)
-																							}
+	yamlUrlMapper, err := urlshort.NewYamlUrlMapper(*yamlFilename)
+	if err != nil {
+		log.Fatalf("Can't create YAML redirect URL provider. %v", err)
+	}
 
-																							func defaultMux() *http.ServeMux {
-																								mux := http.NewServeMux()
-																									mux.HandleFunc("/", hello)
-																										return mux
-																										}
+	yamlHandler := urlshort.NewHttpRedirectHandler(yamlUrlMapper, mapHandler)
 
-																										func hello(w http.ResponseWriter, r *http.Request) {
-																											fmt.Fprintln(w, "Hello, world!")
-																											}
+	fmt.Println("Starting the server on :8080")
+	http.ListenAndServe(":8080", yamlHandler)
+}
+
+func defaultMux() *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", hello)
+	return mux
+}
+
+func hello(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintln(w, "Hello, world!")
+}
